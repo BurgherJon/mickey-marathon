@@ -215,6 +215,31 @@ def build_platforms(tfvars: dict, sm_client) -> tuple[list[dict], dict]:
     return platforms, legacy
 
 
+def load_inquiries() -> dict:
+    """Load the agent's published inquiries from inquiries.json (if present).
+
+    The file declares what other agents can ping this agent about via The
+    Forum's A2A MCP server (/api/v1/mcp/agents/):
+      {"description": "<what this agent does>",
+       "inquiries": [{"name", "description", "request_format", "response_format"}, ...]}
+
+    Returns {} when the file is absent — inquiries are optional.
+    """
+    path = Path(__file__).parent / "inquiries.json"
+    if not path.exists():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    out = {}
+    if data.get("description"):
+        out["description"] = data["description"]
+    if data.get("inquiries"):
+        out["inquiries"] = data["inquiries"]
+        names = ", ".join(i.get("name", "?") for i in data["inquiries"])
+        print(f"  [OK] Inquiries:   {names}")
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description="Register agent in The Forum's Firestore with auto-detected platforms")
     parser.add_argument("--agent-name", required=True,
@@ -258,6 +283,7 @@ def main():
         "vertex_ai_agent_id": args.vertex_ai_agent_id,
         "platforms": platforms,
         "updated_at": datetime.now(timezone.utc),
+        **load_inquiries(),
         **legacy,
     }
 

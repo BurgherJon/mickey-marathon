@@ -536,6 +536,71 @@ resource "google_secret_manager_secret_iam_member" "scheduler_mcp_key_reasoning_
 }
 
 # ==============================================================================
+# SECTION 7: MICKEY'S INTEGRATION SECRETS (Garmin + Todoist)
+#
+# Runtime secrets read only by this agent's Reasoning Engine SA — same
+# pattern as the scheduler MCP key above.
+#
+# garmin-tokens holds the base64 garth token bundle (OAuth1 + OAuth2)
+# produced by scripts/bootstrap_garmin_tokens.py. Garmin blocks headless
+# credential logins (Cloudflare TLS fingerprinting, March 2026), so the
+# bundle is bootstrapped interactively on a workstation and the deployed
+# agent runs token-only. The SA additionally gets secretVersionAdder on
+# this one secret so the agent can persist refreshed token bundles.
+#
+# todoist-token holds Jonathan's personal Todoist API token (Settings →
+# Integrations → Developer). Populate with:
+#   echo -n "TOKEN" | gcloud secrets versions add \
+#     mickey-marathon-todoist-token --data-file=- --project=mickey-marathon
+# ==============================================================================
+
+resource "google_secret_manager_secret" "garmin_tokens" {
+  project   = var.project_id
+  secret_id = "${var.bot_account_id}-garmin-tokens"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
+resource "google_secret_manager_secret_iam_member" "garmin_tokens_reasoning_engine" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.garmin_tokens.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.agent.email}"
+}
+
+# The agent refreshes Garmin OAuth2 tokens against the long-lived OAuth1
+# token and writes the refreshed bundle back so a container restart
+# doesn't lose it.
+resource "google_secret_manager_secret_iam_member" "garmin_tokens_version_adder" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.garmin_tokens.secret_id
+  role      = "roles/secretmanager.secretVersionAdder"
+  member    = "serviceAccount:${google_service_account.agent.email}"
+}
+
+resource "google_secret_manager_secret" "todoist_token" {
+  project   = var.project_id
+  secret_id = "${var.bot_account_id}-todoist-token"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
+resource "google_secret_manager_secret_iam_member" "todoist_token_reasoning_engine" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.todoist_token.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.agent.email}"
+}
+
+# ==============================================================================
 # OUTPUTS
 # ==============================================================================
 

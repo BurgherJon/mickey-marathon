@@ -71,6 +71,8 @@ MAINTAINER_SETUP.md
 get_started_linux.sh
 deploy_and_update.sh
 register_agent.py
+scripts
+inquiries.json
 
 # Docs (don't bloat the container)
 README.md

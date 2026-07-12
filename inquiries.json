@@ -1,0 +1,29 @@
+{
+  "description": "Marathon coach: builds and maintains training plans, tracks workouts/hydration/body composition via Garmin, and answers training questions about her pupil.",
+  "inquiries": [
+    {
+      "name": "planned_workouts_today",
+      "description": "Explains today's planned workout(s): what it is, the training purpose / desired physical adaptations (muscle, aerobic base, speed), how much energy it demands, and an estimated calorie burn.",
+      "request_format": "AGENT_QUERY: planned_workouts_today",
+      "response_format": "PLANNED_WORKOUTS <YYYY-MM-DD>: <workout summary> | purpose=<adaptations targeted> | energy=<low|medium|high> | est_calories=<n> — followed by a short prose explanation."
+    },
+    {
+      "name": "calories_burned_today",
+      "description": "Today's calories burned so far, from Garmin.",
+      "request_format": "AGENT_QUERY: calories_burned_today",
+      "response_format": "CALORIES_BURNED <YYYY-MM-DD>: total=<kcal> active=<kcal> bmr=<kcal>"
+    },
+    {
+      "name": "alarm_time",
+      "description": "When the pupil's alarm is set for (checked across all Garmin devices — watch and sleep monitors).",
+      "request_format": "AGENT_QUERY: alarm_time",
+      "response_format": "ALARM <YYYY-MM-DD>: <HH:MM AM/PM ET | none set> (device: <name>)"
+    },
+    {
+      "name": "weight_body_fat_week",
+      "description": "The last 7 days of weight and body-fat measurements from Garmin, most recent first.",
+      "request_format": "AGENT_QUERY: weight_body_fat_week",
+      "response_format": "WEIGHT_BODY_FAT_REPORT (last 7 days, most recent first)\\n<YYYY-MM-DD> | weight_lbs=<x.x> | body_fat_pct=<x.x|n/a>\\n... one line per day with a weigh-in"
+    }
+  ]
+}

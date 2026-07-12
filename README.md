@@ -1,41 +1,131 @@
 # Mickey Marathon
 
-Mickey Marathon — a Comites.ai agent.
+Mickey Marathon — a marathon-coach agent for Jonathan. She builds and
+maintains training plans in a Google Sheet, tracks workouts / hydration /
+body composition through Garmin, schedules each day's workout to the
+watch and Todoist, debriefs after workouts, audits equipment usage weekly,
+and exchanges data with peer agents (Nora the Nutritionist) through The
+Forum's agent-to-agent MCP server.
 
-Built on **[The Forum](https://github.com/Comites-ai/the-forum)** — [Comites.ai](https://comites.ai)'s open-source middleware that routes messages from Slack, Google Chat, Telegram, and Discord to AI agents running on Vertex AI.
-
-## Status
-
-This agent was bootstrapped from the [Comites.ai Agent Template](https://github.com/Comites-ai/agent-template). The deployed Reasoning Engine currently responds in the persona of Junius Rusticus (Roman Stoic, teacher of Marcus Aurelius — the namesake inspiration for the Comites.ai project) until you replace `STUB_INSTRUCTION` in [`agent.py`](agent.py) with the real prompt.
+Built on **[The Forum](https://github.com/Comites-ai/the-forum)** —
+[Comites.ai](https://comites.ai)'s open-source middleware that routes
+messages from Slack, Google Chat, Telegram, and Discord to AI agents
+running on Vertex AI. Mickey serves Discord.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│   Discord                         │
+│   Discord                                            │
 └──────────────────────────┬───────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────┐
-│  The Forum (Cloud Run, project: vertex-ai-middleware-prod)│
+│  The Forum (Cloud Run, project: vertex-ai-middleware-prod)
+│  · routes DMs · runs scheduled jobs · hosts the      │
+│    scheduler MCP and the agents (A2A) MCP            │
 └──────────────────────────┬───────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────┐
-│  Mickey Marathon (Vertex AI Reasoning Engine) │
-│  Project: mickey-marathon                   │
+│  Mickey Marathon (Vertex AI Reasoning Engine)        │
+│  Project: mickey-marathon                            │
 │  SA:      mickey-marathon@mickey-marathon.iam.gserviceaccount.com
+│  · Garmin Connect (token-only)  · Todoist API v1     │
+│  · plan spreadsheet (Sheets)    · memory doc (Docs)  │
 └──────────────────────────────────────────────────────┘
 ```
+
+## Inquiries (what other agents can ping Mickey about)
+
+Published to The Forum's Firestore from [`inquiries.json`](inquiries.json)
+at every deploy, discoverable via the Forum's agents MCP
+(`{FORUM_URL}/api/v1/mcp/agents/`), and answered when a message arrives
+prefixed `[From Agent: <Agent> | On Behalf Of: <User>]`. Mickey only has
+data for Jonathan Cavell; for other users she replies
+`NO_DATA: I do not coach <User>.`
+
+| Inquiry | Request | Response format |
+|---|---|---|
+| `planned_workouts_today` | `AGENT_QUERY: planned_workouts_today` | `PLANNED_WORKOUTS <YYYY-MM-DD>: <workout summary> \| purpose=<adaptations targeted> \| energy=<low\|medium\|high> \| est_calories=<n>` followed by a short prose explanation (what the workout is, desired physical changes, energy demand, calorie-estimate reasoning) |
+| `calories_burned_today` | `AGENT_QUERY: calories_burned_today` | `CALORIES_BURNED <YYYY-MM-DD>: total=<kcal> active=<kcal> bmr=<kcal>` |
+| `alarm_time` | `AGENT_QUERY: alarm_time` | `ALARM <YYYY-MM-DD>: <HH:MM AM/PM ET> (device: <name>)` or `ALARM <YYYY-MM-DD>: none set` |
+| `weight_body_fat_week` | `AGENT_QUERY: weight_body_fat_week` | `WEIGHT_BODY_FAT_REPORT (last 7 days, most recent first)` then one line per weigh-in day: `<YYYY-MM-DD> \| weight_lbs=<x.x> \| body_fat_pct=<x.x\|n/a>`; if none: `NO_DATA: no weigh-ins in the last 7 days` |
+
+These formats are a contract — agents parse them. Change them only
+together: `inquiries.json` + the prompt section in `agent.py` + this
+table, in one commit.
+
+## The training-plan spreadsheet
+
+Workbook `MARATHON_PLAN_SHEET_ID` (in `.env`), shared Editor with the
+per-agent SA. Two tabs, layout is a hard contract:
+
+- **Philosophy** — only `A1`: the training philosophy in plain English
+  (time goals, course worries like hills/heat, fitness goals, mileage-vs-
+  speedwork preference, strength-training approach, 2-a-day/rest-day
+  preferences, known scheduling constraints). Talked through with
+  Jonathan before every new plan; read before every plan modification.
+- **Current Marathon Plan** — row 1 header `Week | Monday | ... | Sunday`;
+  column A = the Monday date (YYYY-MM-DD) of each week; day cells B–H.
+  Planned cells have no background. After a day passes Mickey rewrites the
+  cell as `Plan: <original>` + newline + `Actual: <what happened>` and
+  colors it: **green** = did the plan (or ≥90% equivalent), **yellow** =
+  worked out but not close, **red** = skipped.
+
+## Scheduled jobs
+
+All created by Mickey through the Forum's scheduler MCP (timezone
+America/New_York, delivery to Discord). Ask her to "set up your jobs" to
+(re)create them — creates are idempotent by name.
+
+| Job | Schedule | What it does |
+|---|---|---|
+| `hydration-morning/afternoon/evening` | 10:00 / 15:00 / 19:00 daily | Reads Garmin hydration, nags with the running total |
+| `nightly-alarm-sync` | 02:00 daily | Reads the alarm (any Garmin device), retargets `morning-readiness-check` to alarm−45min, replies `[SILENT]` |
+| `morning-readiness-check` | retargeted nightly | Sleep/HRV/body-battery/readiness vs today's plan → go message + Todoist task + workout pushed to watch, or a negotiated substitute |
+| `hourly-workout-check` | hourly | New Garmin activity? → debrief, sheet update + color, watch cleanup, Todoist completion, `WORKOUT_COMPLETED` ping to Nora; otherwise `[SILENT]` |
+| `weekly-equipment-audit` | Sat 12:00 | Last 14 days of runs: GPS start within 50mi of a stored location → expect that location's gear, else the travel default; mismatches → ask Jonathan; clean → `[SILENT]` |
+
+## Operations runbook
+
+**Garmin token refresh** (~yearly, or whenever Mickey says her Garmin
+access expired):
+```bash
+/home/jonathan/projects/.my_venv/bin/python3 scripts/bootstrap_garmin_tokens.py
+```
+Interactive (credentials + MFA); stores the token bundle in Secret
+Manager (`mickey-marathon-garmin-tokens`). The deployed agent never does
+credential logins — Garmin blocks headless logins.
+
+**Todoist token**: personal API token (Todoist → Settings → Integrations
+→ Developer) in `mickey-marathon-todoist-token`:
+```bash
+echo -n "TOKEN" | gcloud secrets versions add mickey-marathon-todoist-token \
+  --data-file=- --project=mickey-marathon
+```
+Tasks go to project "Goal 4: Run a 4h Marathon" with label "Have and
+Project a Youthful Energy" (hard-coded in `todoist_utilities.py`).
+
+**Forum MCP key** (authenticates both the scheduler and agents MCP
+servers): provision/rotate from the Forum repo —
+`python scripts/provision_scheduler_api_key.py --agent-id <FIRESTORE_ID>`,
+then store the plaintext in `mickey-marathon-scheduler-mcp-key`.
+
+**Memory doc** (`AGENT_MEMORY_DOC_ID`): structured markdown — pupil
+profile, equipment defaults by location, processed-activity IDs, Todoist
+task map, race metadata. Shared Editor with the per-agent SA.
 
 ## Local development
 
 ```bash
-# In a venv with this repo's dependencies installed
+# In the shared venv with this repo's dependencies installed
 adk web
 ```
 
-That launches a local UI for chatting with the agent. The Forum routing is bypassed — to test the platform integration end-to-end, deploy.
+For pre-deploy verification, drive `root_agent` with `InMemoryRunner`
+(see AGENTS.md "Local development") — the deployed engine hides tool
+errors; the in-process runner surfaces them.
 
 ## Deploy
 
@@ -43,85 +133,17 @@ That launches a local UI for chatting with the agent. The Forum routing is bypas
 ./deploy_and_update.sh
 ```
 
-The script does blue/green: deploys a new Reasoning Engine, smoke-tests it, updates The Forum's Firestore to point at the new engine, clears stale sessions, then deletes the old engine. Safe to re-run; if anything fails partway through, the old engine is untouched.
-
-## Next steps
-
-The agent works end-to-end as soon as you've deployed once (it'll respond as Junius Rusticus on whichever platform you enabled — proving the pipeline works before you write any real agent logic). From there, the typical buildup is:
-
-### 1. Define what your agent does
-
-Edit [`agent.py`](agent.py):
-
-- Replace `STUB_INSTRUCTION` with the system prompt that defines your agent's persona, the tasks it handles, and how it should call tools.
-- Update the `description` field — that's what shows up if another agent ever uses yours as a sub-agent, and it's what registration writes to Firestore.
-- Pick the model that fits the work. `HIGH_QUALITY_AGENT_MODEL` in `.env` is what `root_agent` uses by default; `QUICK_AGENT_MODEL` is the convention for cheaper sub-agents.
-
-### 2. Use the persistent memory that's already wired up
-
-`get_agent_memory()` and `update_agent_memory()` are already registered in `root_agent.tools`. They read and write a Google Doc whose ID came from `AGENT_MEMORY_DOC_ID` in `.env` (you set this in the bootstrap; the doc is shared with this agent's runtime SA).
-
-To use them, instruct the model in your prompt:
-
-- *"Before every response, call `get_agent_memory` and use the contents to personalize your reply."*
-- *"At the end of each session, call `update_agent_memory(...)` with the complete updated memory text — distill what you learned, don't just append."*
-
-If you'd rather not use memory: delete the two `FunctionTool(get_agent_memory)` / `FunctionTool(update_agent_memory)` entries from `root_agent.tools` in `agent.py`, and leave `AGENT_MEMORY_DOC_ID` blank.
-
-### 3. Add function tools
-
-Edit [`custom_functions.py`](custom_functions.py):
-
-- Define plain Python functions with clear docstrings (the docstring is shown to the LLM as the tool description).
-- Type-hint the args and return value.
-- Import and wrap in `agent.py`:
-  ```python
-  from .custom_functions import my_tool
-  ...
-  tools=[FunctionTool(my_tool), ...]
-  ```
-
-### 4. Add sub-agents (optional)
-
-Edit [`custom_agents.py`](custom_agents.py):
-
-- Define a separate `Agent(...)` with its own narrow prompt for specialized work (web search, classification, etc.).
-- Wrap in `AgentTool(agent=my_subagent)` and add to `root_agent.tools`.
-
-### 5. Add MCP toolsets (optional)
-
-- For The Forum's hosted scheduler MCP: uncomment Section 6 in [`terraform/main.tf`](terraform/main.tf), `terraform apply`, then follow the three-step provisioning in [The Forum's `FOR_AGENT_DEVELOPERS.md` §"Scheduler MCP Server"](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md#scheduler-mcp-server). Then uncomment the `scheduler_toolset` block in [`agent.py`](agent.py) and add it to `root_agent.tools`.
-- For other MCP servers (GitHub, Garmin, etc.): add directly in [`agent.py`](agent.py) using `MCPToolset(...)`. See the "Adding MCP Servers" section in [`FOR_AGENT_DEVELOPERS.md`](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md#adding-mcp-servers-to-your-agent-adk-native).
-
-### 6. Add external API integration with secrets
-
-1. Add the secret container + IAM binding for the Reasoning Engine SA in [`terraform/main.tf`](terraform/main.tf) (follow the pattern of the existing platform secrets).
-2. `terraform apply`.
-3. Populate the value: `echo -n "API_KEY" | gcloud secrets versions add my-secret --data-file=- --project=$GOOGLE_CLOUD_PROJECT`.
-4. Read at module load in your tool code: `secret_utilities.get_secret_from_secret_manager(project_id, "my-secret")`.
-
-### 7. Add image / multimodal support (optional)
-
-The Forum forwards images alongside text in the `images` parameter. The default `Agent` doesn't process them — you need to override input handling. See [`FOR_AGENT_DEVELOPERS.md` §"Receiving Images"](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md#receiving-images-from-slack).
-
-### 8. Enable additional platforms
-
-To add Telegram once Slack is already working (or any other combination):
-
-1. Uncomment the relevant section in [`terraform/main.tf`](terraform/main.tf).
-2. `terraform apply` (creates the secret container + IAM binding).
-3. Populate the token: `echo -n "TOKEN" | gcloud secrets versions add mickey-marathon-{platform}-token --data-file=- --project=$GOOGLE_CLOUD_PROJECT`.
-4. For Telegram / Discord, do the platform-side webhook / Gateway setup per [`FOR_AGENT_DEVELOPERS.md`](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md).
-5. `./deploy_and_update.sh` — `register_agent.py` auto-detects the new secret and adds the platform to your Firestore record.
+Blue/green: deploys a new Reasoning Engine, smoke-tests it, re-registers
+in the Forum's Firestore (including `inquiries.json`), clears stale
+sessions, deletes the old engine.
 
 ## Operating rules
 
-See [AGENTS.md](AGENTS.md) for the invariants (where infrastructure changes go, how secrets work, how deploys work, etc.). Same rules apply whether you or an AI coding assistant is doing the work.
-
-## License
-
-This agent was bootstrapped from the [Comites.ai Agent Template](https://github.com/Comites-ai/agent-template), which is MIT-licensed. This repo ships without a license file, so it defaults to "all rights reserved" — add your own `LICENSE` if you intend to distribute it (keep it permissive with MIT/Apache-2.0, copyleft with AGPL-3.0, or proprietary — your choice). Separately, the Comites.ai [trademark policy](https://github.com/Comites-ai/agent-template/blob/main/TRADEMARK.md) still applies regardless of your code license: don't use "Comites", "The Forum", or related names in your project's name.
+See [AGENTS.md](AGENTS.md) for the invariants (infrastructure via
+terraform, secrets in Secret Manager, deploy via the script, inquiry
+contract sync, etc.).
 
 ## Acknowledgements
 
-Bootstrapped from the [Comites.ai Agent Template](https://github.com/Comites-ai/agent-template) (MIT) and runs on [The Forum](https://github.com/Comites-ai/the-forum) (AGPL-3.0).
+Bootstrapped from the [Comites.ai Agent Template](https://github.com/Comites-ai/agent-template)
+(MIT) and runs on [The Forum](https://github.com/Comites-ai/the-forum) (AGPL-3.0).

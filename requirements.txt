@@ -7,6 +7,11 @@ google-cloud-secret-manager
 google-cloud-firestore
 google-cloud-aiplatform
 google-genai
+# Garmin Connect (unofficial; curl_cffi-based client — see garmin_utilities.py
+# for the token-only auth model and scripts/bootstrap_garmin_tokens.py).
+garminconnect
+# Todoist unified API v1 SDK (v4.x, httpx-based).
+todoist-api-python
 # [a2a] pulls the a2a package the ADK API server needs for its task store. The
 # deployed engine runs `adk api_server`, which imports
 # a2a.server.tasks.InMemoryTaskStore at startup whether or not this agent uses

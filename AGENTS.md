@@ -121,6 +121,47 @@ The bootstrap script runs once at repo setup and deletes itself. Don't try to re
 
 `agent.py` sets `os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'` as its very first statement, *above* the `google.adk` / `google.genai` imports. This is deliberate and load-bearing: the Reasoning Engine deploys to a regional location (`us-central1`), but the Gemini preview models the template defaults to are only served on the `global` endpoint. The Google libraries read `GOOGLE_CLOUD_LOCATION` at import, so the override has to come before they're imported. If you move that line below the imports — or drop it — preview models start failing with `404 / NOT_FOUND` while regional models keep working, which makes it look like a model-name typo rather than an endpoint problem.
 
+### 13. Inquiry formats are a published contract — change them atomically
+
+Mickey publishes "inquiries" (things other agents can ping her about) to
+The Forum's Firestore via `inquiries.json` + `register_agent.py` at every
+deploy. Peer agents parse the response formats verbatim. Any change must
+touch all three places in ONE commit: `inquiries.json`, the "Inquiries you
+answer" section of the prompt in `agent.py`, and the table in `README.md` —
+then redeploy (registration happens automatically).
+
+### 14. A2A messages carry an On-Behalf-Of user — scope answers to it
+
+Messages prefixed `[From Agent: <Agent> | On Behalf Of: <User>]` come from
+other agents via the Forum's agents MCP. The prompt must scope every answer
+to that user and refuse (`NO_DATA: ...`) for users this agent has no data
+for. Never let one user's data answer a question about another user.
+
+### 15. Scheduled condition-check jobs reply [SILENT], never empty
+
+The Forum treats an empty reply to a fired job as a failure; a reply
+starting with `[SILENT]` is a successful no-delivery. Every job that only
+sometimes has news (hourly workout check, weekly equipment audit, nightly
+alarm sync) must reply `[SILENT]` on the quiet path. Never remove that
+instruction from a job's prompt section.
+
+### 16. Garmin auth is token-only — never add credential login to the agent
+
+Garmin blocks headless credential logins. The deployed agent loads a token
+bundle from Secret Manager (`mickey-marathon-garmin-tokens`), bootstrapped
+by `scripts/bootstrap_garmin_tokens.py` on a workstation. On auth failure,
+tools return a GarminAuthExpired error and the prompt tells Jonathan to
+re-run the bootstrap. Do not "fix" this by adding credentials to the agent
+or retry loops — that's how Garmin accounts get locked for 48h+.
+
+### 17. Tool functions return error dicts, never raise
+
+Every function in `custom_functions.py` is wrapped by the `_tool` decorator,
+which converts exceptions into `{"error": "..."}` results. A raised
+exception aborts the whole turn on Agent Engine (the user sees an empty
+reply — and for scheduled jobs, a failure count). Keep the decorator on
+every tool you add.
+
 ## Building your agent
 
 When you're filling in actual agent behavior:
