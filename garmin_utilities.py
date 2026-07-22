@@ -143,12 +143,14 @@ def _auth_guard(e: Exception) -> None:
 # Hydration
 # ============================================================================
 
-def log_water_ounces(ounces: float) -> Dict[str, Any]:
-    """Log water consumed now, in fluid ounces. Returns the day's new totals."""
+def log_water_ounces(ounces: float, date: Optional[str] = None) -> Dict[str, Any]:
+    """Log water consumed, in fluid ounces, to the given date (YYYY-MM-DD,
+    defaults to today). Returns that day's new totals."""
+    resolved_date = date or _today()
     client = _get_client()
     try:
-        client.add_hydration_data(value_in_ml=round(ounces * ML_PER_OUNCE, 1), cdate=_today())
-        return get_hydration_today()
+        client.add_hydration_data(value_in_ml=round(ounces * ML_PER_OUNCE, 1), cdate=resolved_date)
+        return get_hydration_today(resolved_date)
     except GarminAuthExpired:
         raise
     except Exception as e:
@@ -156,11 +158,13 @@ def log_water_ounces(ounces: float) -> Dict[str, Any]:
         raise
 
 
-def get_hydration_today() -> Dict[str, Any]:
-    """Today's hydration: consumed vs goal, in both ml and ounces."""
+def get_hydration_today(date: Optional[str] = None) -> Dict[str, Any]:
+    """Hydration for the given date (YYYY-MM-DD, defaults to today):
+    consumed vs goal, in both ml and ounces."""
+    resolved_date = date or _today()
     client = _get_client()
     try:
-        data = client.get_hydration_data(_today()) or {}
+        data = client.get_hydration_data(resolved_date) or {}
     except GarminAuthExpired:
         raise
     except Exception as e:
@@ -169,7 +173,7 @@ def get_hydration_today() -> Dict[str, Any]:
     consumed_ml = data.get("valueInML") or 0
     goal_ml = data.get("goalInML") or 0
     return {
-        "date": _today(),
+        "date": resolved_date,
         "consumed_ml": consumed_ml,
         "consumed_oz": round(consumed_ml / ML_PER_OUNCE, 1),
         "goal_ml": goal_ml,

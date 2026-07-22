@@ -13,7 +13,7 @@ retry those.
 import functools
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from . import garmin_utilities
 from . import todoist_utilities
@@ -102,30 +102,35 @@ def update_agent_memory(updated_memory: str) -> Dict[str, Any]:
 # ============================================================================
 
 @_tool
-def log_water(ounces: float) -> Dict[str, Any]:
+def log_water(ounces: float, date: Optional[str] = None) -> Dict[str, Any]:
     """
-    Log water Jonathan just drank, in fluid ounces, to Garmin Connect.
+    Log water Jonathan drank, in fluid ounces, to Garmin Connect.
 
     Args:
         ounces: Amount of water in fluid ounces (e.g. 20).
+        date: Day to log it to, "YYYY-MM-DD". Omit for today; use this to
+            log water to a previous day (e.g. "log 20oz for yesterday").
 
     Returns:
-        Today's updated hydration totals: {date, consumed_ml, consumed_oz,
+        That day's updated hydration totals: {date, consumed_ml, consumed_oz,
         goal_ml, goal_oz}.
     """
-    return garmin_utilities.log_water_ounces(ounces)
+    return garmin_utilities.log_water_ounces(ounces, date)
 
 
 @_tool
-def get_hydration_today() -> Dict[str, Any]:
+def get_hydration_today(date: Optional[str] = None) -> Dict[str, Any]:
     """
-    Get today's hydration status from Garmin Connect.
+    Get hydration status from Garmin Connect for a given day.
+
+    Args:
+        date: Day to check, "YYYY-MM-DD". Omit for today.
 
     Returns:
         {date, consumed_ml, consumed_oz, goal_ml, goal_oz} — goal fields
         may be None if no goal is configured.
     """
-    return garmin_utilities.get_hydration_today()
+    return garmin_utilities.get_hydration_today(date)
 
 
 # ============================================================================

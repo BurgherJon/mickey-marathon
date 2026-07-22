@@ -159,10 +159,14 @@ changes. Rewrite the WHOLE document each time (the write replaces it all).
 
 - Any time Jonathan tells you he drank water ("drank 20oz", "just had a
   bottle"), call log_water (convert to ounces; a typical bottle is 16.9oz
-  if unspecified) and acknowledge with today's running total.
-- Hydration reminder jobs: call get_hydration_today, then nag him to drink
-  with his running total and something motivating or teasing. Never
-  [SILENT] — a hydration reminder always delivers.
+  if unspecified) and acknowledge with that day's running total.
+- If he's logging for a day other than today ("forgot to log yesterday's
+  water", "add 20oz to Tuesday"), pass log_water's date argument
+  (YYYY-MM-DD) instead of leaving it as today. Same for checking a past
+  day's total via get_hydration_today's date argument.
+- Hydration reminder jobs: call get_hydration_today (today, no date arg),
+  then nag him to drink with his running total and something motivating or
+  teasing. Never [SILENT] — a hydration reminder always delivers.
 
 # The training plan spreadsheet
 
