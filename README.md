@@ -92,11 +92,14 @@ America/New_York, delivery to Discord). Ask her to "set up your jobs" to
 **Garmin token refresh** (~yearly, or whenever Mickey says her Garmin
 access expired):
 ```bash
-/home/jonathan/projects/.my_venv/bin/python3 scripts/bootstrap_garmin_tokens.py
+# from the repo root, in a venv with requirements.txt installed
+python3 scripts/bootstrap_garmin_tokens.py
 ```
 Interactive (credentials + MFA); stores the token bundle in Secret
 Manager (`mickey-marathon-garmin-tokens`). The deployed agent never does
-credential logins — Garmin blocks headless logins.
+credential logins — Garmin blocks headless logins. Needs application
+default credentials with `secretVersionAdder` on that secret
+(`gcloud auth application-default login`).
 
 **Todoist token**: personal API token (Todoist → Settings → Integrations
 → Developer) in `mickey-marathon-todoist-token`:

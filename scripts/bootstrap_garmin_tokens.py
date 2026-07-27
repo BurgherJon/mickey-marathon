@@ -14,11 +14,11 @@ March 2026), so the deployed agent NEVER logs in with credentials. Instead:
      Mickey will start telling you to re-run this script.
 
 Usage:
-    # from the Marathon repo root, in the shared venv
-    /home/jonathan/projects/.my_venv/bin/python3 scripts/bootstrap_garmin_tokens.py
+    # from the Marathon repo root, in a venv with requirements.txt installed
+    python3 scripts/bootstrap_garmin_tokens.py
 
     # or import tokens you already have (e.g. ~/.garminconnect)
-    ... scripts/bootstrap_garmin_tokens.py --tokenstore ~/.garminconnect
+    python3 scripts/bootstrap_garmin_tokens.py --tokenstore ~/.garminconnect
 
 Re-running rotates the stored bundle (adds a new secret version; the agent
 always reads `latest`).
