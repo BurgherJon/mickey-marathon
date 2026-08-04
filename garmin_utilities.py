@@ -4,9 +4,21 @@ Garmin Connect integration for Mickey Marathon.
 All Garmin reads/writes go through the unofficial `garminconnect` library
 (v0.3.x, curl_cffi-based client). The deployed agent NEVER logs in with
 credentials — Garmin blocks headless credential logins (Cloudflare TLS
-fingerprinting, March 2026). Instead it loads a token bundle (long-lived
-OAuth1 ~1 year + auto-refreshing OAuth2) from Secret Manager, bootstrapped
-interactively by scripts/bootstrap_garmin_tokens.py.
+fingerprinting, March 2026). Instead it loads a token bundle from Secret
+Manager, bootstrapped interactively by scripts/bootstrap_garmin_tokens.py.
+
+Token model (verified empirically 2026-08-04, AGENT-40 — NOT the "OAuth1
+~1 year" model this module previously described):
+  - di_token: a JWT that expires ~21 hours after issue. garminconnect
+    refreshes it automatically whenever it has expired.
+  - di_refresh_token: opaque-ish (base64 JSON) credential that mints the
+    next di_token. Garmin ROTATES it on every refresh — each refresh
+    invalidates the previous refresh token. A refresh that is not written
+    back to Secret Manager is therefore LOST STATE: the next cold start
+    loads a rotated-away token and dies with GarminAuthExpired.
+Hence every public function here persists any changed bundle after the
+call (see _persists_tokens), and persistence failures are retried and
+loud instead of best-effort.
 
 When the bundle finally expires or is revoked, every function here raises
 GarminAuthExpired. The agent prompt translates that into a message telling
@@ -16,8 +28,10 @@ credential login.
 Times/dates: Garmin's connectapi works in the user's local calendar days.
 All "today" logic here uses America/New_York.
 """
+import functools
 import logging
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -72,9 +86,9 @@ def _get_client() -> Garmin:
     """Load the token bundle from Secret Manager and log in token-only.
 
     Cached per process (cold-start cost paid on the first Garmin call).
-    On success, if the client refreshed the OAuth2 token during load, the
-    refreshed bundle is written back to Secret Manager (best-effort) so a
-    container restart doesn't redo the refresh dance.
+    If the login refreshed the bundle, the rotated tokens are persisted
+    immediately — mandatory, not best-effort, because Garmin invalidates
+    the previous refresh token on rotation (AGENT-40).
     """
     global _client, _loaded_bundle
     if _client is not None:
@@ -107,26 +121,71 @@ def _get_client() -> Garmin:
     return _client
 
 
+_PERSIST_ATTEMPTS = 3
+
+
 def _persist_refreshed_tokens() -> None:
-    """Write the current token bundle back to Secret Manager if it changed."""
+    """Write the current token bundle back to Secret Manager if it changed.
+
+    Garmin rotates di_refresh_token on every refresh (AGENT-40), so a lost
+    write-back strands the only credential that can mint the next session:
+    the running container keeps working from memory, and the NEXT cold
+    start dies with GarminAuthExpired. A failed write here is data loss,
+    not a cosmetic miss — retry, and fail loudly if the retries run out.
+    """
     global _loaded_bundle
     if _client is None:
         return
     try:
         current = _client.client.dumps()
-        if current and current != _loaded_bundle:
-            from google.cloud import secretmanager
+    except Exception as e:
+        logger.error(f"Could not serialize the Garmin token bundle for persistence: {e}")
+        return
+    if not current or current == _loaded_bundle:
+        return
 
+    from google.cloud import secretmanager
+
+    parent = f"projects/{_secret_project()}/secrets/{GARMIN_TOKENS_SECRET_ID}"
+    last_error: Optional[Exception] = None
+    for attempt in range(1, _PERSIST_ATTEMPTS + 1):
+        try:
             sm = secretmanager.SecretManagerServiceClient()
-            parent = f"projects/{_secret_project()}/secrets/{GARMIN_TOKENS_SECRET_ID}"
             sm.add_secret_version(
                 request={"parent": parent, "payload": {"data": current.encode("utf-8")}}
             )
             _loaded_bundle = current
             logger.info("Persisted refreshed Garmin token bundle to Secret Manager")
-    except Exception as e:
-        # Best-effort: a failed write-back only costs a re-refresh next cold start.
-        logger.warning(f"Could not persist refreshed Garmin tokens: {e}")
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < _PERSIST_ATTEMPTS:
+                time.sleep(2 ** (attempt - 1))
+    logger.error(
+        f"FAILED to persist the rotated Garmin token bundle after "
+        f"{_PERSIST_ATTEMPTS} attempts: {last_error}. The stored bundle is now "
+        f"STALE — if this container recycles before a later write-back "
+        f"succeeds, Garmin auth will die and need a manual re-bootstrap "
+        f"(scripts/bootstrap_garmin_tokens.py)."
+    )
+
+
+def _persists_tokens(fn):
+    """Persist any rotated token bundle after every Garmin call.
+
+    garminconnect refreshes di_token transparently whenever it has expired
+    (~21 h), and each refresh rotates di_refresh_token. Persisting only at
+    login-time — the old behavior — meant warm-container refreshes were
+    never written back, which is exactly the ~weekly silent death AGENT-40
+    chronicles. The persist is a no-op when the bundle hasn't changed.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _persist_refreshed_tokens()
+    return wrapper
 
 
 def _auth_guard(e: Exception) -> None:
@@ -143,6 +202,7 @@ def _auth_guard(e: Exception) -> None:
 # Hydration
 # ============================================================================
 
+@_persists_tokens
 def log_water_ounces(ounces: float, date: Optional[str] = None) -> Dict[str, Any]:
     """Log water consumed, in fluid ounces, to the given date (YYYY-MM-DD,
     defaults to today). Returns that day's new totals."""
@@ -158,6 +218,7 @@ def log_water_ounces(ounces: float, date: Optional[str] = None) -> Dict[str, Any
         raise
 
 
+@_persists_tokens
 def get_hydration_today(date: Optional[str] = None) -> Dict[str, Any]:
     """Hydration for the given date (YYYY-MM-DD, defaults to today):
     consumed vs goal, in both ml and ounces."""
@@ -185,6 +246,7 @@ def get_hydration_today(date: Optional[str] = None) -> Dict[str, Any]:
 # Alarms / readiness / vitals
 # ============================================================================
 
+@_persists_tokens
 def get_alarms() -> List[Dict[str, Any]]:
     """Enabled alarms across every Garmin device on the account.
 
@@ -216,6 +278,7 @@ def get_alarms() -> List[Dict[str, Any]]:
     return alarms
 
 
+@_persists_tokens
 def get_readiness_snapshot() -> Dict[str, Any]:
     """This morning's readiness picture: sleep, HRV, RHR, body battery,
     Garmin training readiness. Individual sections may be None if the
@@ -264,6 +327,7 @@ def get_readiness_snapshot() -> Dict[str, Any]:
     return out
 
 
+@_persists_tokens
 def get_calories_burned_today() -> Dict[str, Any]:
     """Today's calories: total, active, and BMR."""
     client = _get_client()
@@ -286,6 +350,7 @@ def get_calories_burned_today() -> Dict[str, Any]:
 # Activities
 # ============================================================================
 
+@_persists_tokens
 def get_recent_activities(days: int = 14) -> List[Dict[str, Any]]:
     """Activities from the last `days` days, newest first. Each entry:
     activity_id, name, type, start_local, distance_miles, duration_minutes,
@@ -316,6 +381,7 @@ def get_recent_activities(days: int = 14) -> List[Dict[str, Any]]:
     return out
 
 
+@_persists_tokens
 def get_activity_detail(activity_id: str) -> Dict[str, Any]:
     """Full detail for one activity: summary + per-split paces + gear."""
     client = _get_client()
@@ -377,6 +443,7 @@ _NO_TARGET = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target", "di
 _RUNNING_SPORT = {"sportTypeId": 1, "sportTypeKey": "running", "displayOrder": 1}
 
 
+@_persists_tokens
 def push_run_workout_to_watch(name: str, steps: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Build a structured running workout, upload it, and schedule it for
     today so it syncs to the watch.
@@ -429,6 +496,7 @@ def push_run_workout_to_watch(name: str, steps: List[Dict[str, Any]]) -> Dict[st
     return {"workout_id": workout_id, "name": full_name, "scheduled_date": _today()}
 
 
+@_persists_tokens
 def push_strength_workout_to_watch(name: str, duration_minutes: int) -> Dict[str, Any]:
     """Push a simple timed strength workout to the watch for today.
 
@@ -468,6 +536,7 @@ def push_strength_workout_to_watch(name: str, duration_minutes: int) -> Dict[str
     return {"workout_id": workout_id, "name": full_name, "scheduled_date": _today()}
 
 
+@_persists_tokens
 def remove_workout_from_watch(workout_name: str) -> Dict[str, Any]:
     """Delete Mickey-pushed workout(s) matching `workout_name` (with or
     without the 'Mickey: ' prefix). Only touches workouts whose names
@@ -495,6 +564,7 @@ def remove_workout_from_watch(workout_name: str) -> Dict[str, Any]:
 # Body composition
 # ============================================================================
 
+@_persists_tokens
 def get_body_comp_last_week() -> List[Dict[str, Any]]:
     """Last 7 days of weigh-ins: [{date, weight_lbs, body_fat_pct}], most
     recent first. Days with no weigh-in are omitted."""

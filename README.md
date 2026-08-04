@@ -89,8 +89,10 @@ America/New_York, delivery to Discord). Ask her to "set up your jobs" to
 
 ## Operations runbook
 
-**Garmin token refresh** (~yearly, or whenever Mickey says her Garmin
-access expired):
+**Garmin token re-bootstrap** (only when Mickey says her Garmin access
+expired — with healthy rotation persistence the bundle renews itself
+indefinitely; the old "~yearly" cadence described a token model Garmin
+doesn't actually use, see AGENT-40):
 ```bash
 # from the repo root, in a venv with requirements.txt installed
 python3 scripts/bootstrap_garmin_tokens.py

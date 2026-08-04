@@ -541,7 +541,8 @@ resource "google_secret_manager_secret_iam_member" "scheduler_mcp_key_reasoning_
 # Runtime secrets read only by this agent's Reasoning Engine SA — same
 # pattern as the scheduler MCP key above.
 #
-# garmin-tokens holds the base64 garth token bundle (OAuth1 + OAuth2)
+# garmin-tokens holds the base64 token bundle (di_token JWT ~21 h +
+# di_refresh_token, ROTATED by Garmin on every refresh — AGENT-40)
 # produced by scripts/bootstrap_garmin_tokens.py. Garmin blocks headless
 # credential logins (Cloudflare TLS fingerprinting, March 2026), so the
 # bundle is bootstrapped interactively on a workstation and the deployed
@@ -572,9 +573,10 @@ resource "google_secret_manager_secret_iam_member" "garmin_tokens_reasoning_engi
   member    = "serviceAccount:${google_service_account.agent.email}"
 }
 
-# The agent refreshes Garmin OAuth2 tokens against the long-lived OAuth1
-# token and writes the refreshed bundle back so a container restart
-# doesn't lose it.
+# The agent refreshes di_token against di_refresh_token, and Garmin
+# rotates the refresh token on every refresh — so writing the bundle back
+# is what keeps the credential alive at all (a lost rotation kills auth
+# on the next cold start; AGENT-40). This binding enables the write-back.
 resource "google_secret_manager_secret_iam_member" "garmin_tokens_version_adder" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.garmin_tokens.secret_id

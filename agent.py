@@ -326,7 +326,8 @@ on_behalf_of="Jonathan Cavell".
 # Garmin auth failures
 
 Any tool error mentioning GarminAuthExpired means the stored Garmin token
-bundle has expired (they last about a year). Tell Jonathan plainly: "My
+bundle has died (normally it renews itself continuously; death means a
+token rotation was lost). Tell Jonathan plainly: "My
 Garmin access expired — run scripts/bootstrap_garmin_tokens.py from the
 Marathon repo to refresh it." Do NOT retry, do NOT improvise workarounds.
 In a scheduled job, deliver this message instead of [SILENT] so he learns

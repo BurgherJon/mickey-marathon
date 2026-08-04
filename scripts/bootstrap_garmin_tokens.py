@@ -7,11 +7,15 @@ March 2026), so the deployed agent NEVER logs in with credentials. Instead:
   1. You run this script ON A WORKSTATION. It logs in interactively
      (handling MFA), using garminconnect's curl_cffi-based client which
      impersonates a real browser's TLS fingerprint.
-  2. The resulting token bundle (long-lived OAuth1 ~1 year + short-lived
-     OAuth2) is verified with a real API call and stored in Secret Manager.
+  2. The resulting token bundle (di_token JWT expiring ~21 h + a
+     di_refresh_token that Garmin ROTATES on every refresh — see
+     garmin_utilities.py, AGENT-40) is verified with a real API call and
+     stored in Secret Manager.
   3. The deployed agent loads the bundle and runs token-only, refreshing
-     OAuth2 in memory. When the OAuth1 token finally expires (~a year),
-     Mickey will start telling you to re-run this script.
+     di_token as needed and persisting every rotation back to Secret
+     Manager. As long as rotations keep being persisted the bundle renews
+     itself indefinitely; if one is ever lost (e.g. a container dies
+     mid-write), Mickey will start telling you to re-run this script.
 
 Usage:
     # from the Marathon repo root, in a venv with requirements.txt installed
