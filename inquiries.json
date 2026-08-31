@@ -24,6 +24,12 @@
       "description": "The last 7 days of weight and body-fat measurements from Garmin, most recent first.",
       "request_format": "AGENT_QUERY: weight_body_fat_week",
       "response_format": "WEIGHT_BODY_FAT_REPORT (last 7 days, most recent first)\\n<YYYY-MM-DD> | weight_lbs=<x.x> | body_fat_pct=<x.x|n/a>\\n... one line per day with a weigh-in"
+    },
+    {
+      "name": "daily_metric",
+      "description": "Report a tracked metric's value for ANY date (not just today) from Garmin — the Magister's tracking-sheet supply line. Keys: weight, body_fat_pct, run_distance, run_time, lift, sleep_score. Several daily_metric lines may be batched in one message; each gets its own METRIC/NO_DATA reply line, same order.",
+      "request_format": "AGENT_QUERY: daily_metric | metric=<column key> | date=<YYYY-MM-DD>",
+      "response_format": "METRIC: metric=<key> date=<YYYY-MM-DD> value=<number|text> — or NO_DATA: <reason>"
     }
   ]
 }

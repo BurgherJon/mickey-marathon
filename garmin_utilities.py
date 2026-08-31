@@ -565,6 +565,101 @@ def remove_workout_from_watch(workout_name: str) -> Dict[str, Any]:
 # ============================================================================
 
 @_persists_tokens
+def get_activities_in_range(start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """All activities between start_date and end_date (YYYY-MM-DD, both
+    inclusive), newest first. Same slim rows as get_recent_activities."""
+    client = _get_client()
+    try:
+        raw = client.get_activities_by_date(start_date, end_date) or []
+    except GarminAuthExpired:
+        raise
+    except Exception as e:
+        _auth_guard(e)
+        raise
+    out = []
+    for a in raw:
+        out.append({
+            "activity_id": a.get("activityId"),
+            "name": a.get("activityName"),
+            "type": (a.get("activityType") or {}).get("typeKey"),
+            "start_local": a.get("startTimeLocal"),
+            "distance_miles": round((a.get("distance") or 0) / 1609.344, 2),
+            "duration_minutes": round((a.get("duration") or 0) / 60, 1),
+            "calories": a.get("calories"),
+            "avg_hr": a.get("averageHR"),
+        })
+    out.sort(key=lambda x: x.get("start_local") or "", reverse=True)
+    return out
+
+
+@_persists_tokens
+def get_body_comp_in_range(start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """Weigh-ins between start_date and end_date (YYYY-MM-DD, inclusive):
+    [{date, weight_lbs, body_fat_pct}], most recent first; days with no
+    weigh-in are omitted."""
+    client = _get_client()
+    try:
+        data = client.get_body_composition(start_date, end_date) or {}
+    except GarminAuthExpired:
+        raise
+    except Exception as e:
+        _auth_guard(e)
+        raise
+    entries = []
+    for e_ in (data.get("dateWeightList") or []):
+        weight_g = e_.get("weight")
+        entries.append({
+            "date": e_.get("calendarDate"),
+            "weight_lbs": round(weight_g / 453.592, 1) if weight_g else None,
+            "body_fat_pct": e_.get("bodyFat"),
+        })
+    entries.sort(key=lambda x: x["date"] or "", reverse=True)
+    return entries
+
+
+@_persists_tokens
+def get_sleep_for_date(date: str) -> Dict[str, Any]:
+    """Sleep record for one date (YYYY-MM-DD): sleep_score (1-100 or None),
+    duration_hours, bedtime/wake timestamps."""
+    client = _get_client()
+    try:
+        sleep = client.get_sleep_data(date) or {}
+    except GarminAuthExpired:
+        raise
+    except Exception as e:
+        _auth_guard(e)
+        raise
+    daily = sleep.get("dailySleepDTO") or {}
+    return {
+        "date": date,
+        "sleep_score": (daily.get("sleepScores") or {}).get("overall", {}).get("value"),
+        "duration_hours": round((daily.get("sleepTimeSeconds") or 0) / 3600, 2),
+        "bedtime_gmt": daily.get("sleepStartTimestampGMT"),
+        "wake_gmt": daily.get("sleepEndTimestampGMT"),
+    }
+
+
+@_persists_tokens
+def get_calories_burned_for_date(date: str) -> Dict[str, Any]:
+    """Calories burned on one date (YYYY-MM-DD): {date, total_kcal,
+    active_kcal, bmr_kcal}."""
+    client = _get_client()
+    try:
+        stats = client.get_stats(date) or {}
+    except GarminAuthExpired:
+        raise
+    except Exception as e:
+        _auth_guard(e)
+        raise
+    return {
+        "date": date,
+        "total_kcal": stats.get("totalKilocalories"),
+        "active_kcal": stats.get("activeKilocalories"),
+        "bmr_kcal": stats.get("bmrKilocalories"),
+    }
+
+
+@_persists_tokens
 def get_body_comp_last_week() -> List[Dict[str, Any]]:
     """Last 7 days of weigh-ins: [{date, weight_lbs, body_fat_pct}], most
     recent first. Days with no weigh-in are omitted."""

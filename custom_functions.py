@@ -198,6 +198,72 @@ def get_recent_activities(days: int) -> List[Dict[str, Any]]:
 
 
 @_tool
+def get_activities_in_range(start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """
+    Get ALL of Jonathan's Garmin activities between two dates (inclusive),
+    newest first — the historical/backfill view. Use this to answer
+    questions about any past day or week: runs (type contains "running"),
+    lifts (type "strength_training"), and everything else.
+
+    Args:
+        start_date: First day of the window, YYYY-MM-DD.
+        end_date: Last day of the window, YYYY-MM-DD (same as start_date
+            for a single day).
+
+    Returns:
+        List of {activity_id, name, type, start_local, distance_miles,
+        duration_minutes, calories, avg_hr}.
+    """
+    return garmin_utilities.get_activities_in_range(start_date, end_date)
+
+
+@_tool
+def get_body_comp_in_range(start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """
+    Get Jonathan's weight and body-fat measurements for ANY date range
+    (inclusive), most recent first. Days without a weigh-in are omitted.
+
+    Args:
+        start_date: First day, YYYY-MM-DD.
+        end_date: Last day, YYYY-MM-DD (same as start_date for one day).
+
+    Returns:
+        List of {date, weight_lbs, body_fat_pct}.
+    """
+    return garmin_utilities.get_body_comp_in_range(start_date, end_date)
+
+
+@_tool
+def get_sleep_for_date(date: str) -> Dict[str, Any]:
+    """
+    Get Jonathan's sleep record for any single date (the night ENDING that
+    morning): sleep score (1-100), duration, bed/wake times.
+
+    Args:
+        date: YYYY-MM-DD.
+
+    Returns:
+        {date, sleep_score, duration_hours, bedtime_gmt, wake_gmt};
+        sleep_score is None if that night wasn't recorded.
+    """
+    return garmin_utilities.get_sleep_for_date(date)
+
+
+@_tool
+def get_calories_burned_for_date(date: str) -> Dict[str, Any]:
+    """
+    Get calories burned on any single date.
+
+    Args:
+        date: YYYY-MM-DD.
+
+    Returns:
+        {date, total_kcal, active_kcal, bmr_kcal}.
+    """
+    return garmin_utilities.get_calories_burned_for_date(date)
+
+
+@_tool
 def get_activity_detail(activity_id: str) -> Dict[str, Any]:
     """
     Get full detail for one Garmin activity: per-lap splits (distance,

@@ -35,7 +35,11 @@ from .custom_functions import (
     get_activity_detail,
     get_agent_memory,
     get_alarms,
+    get_activities_in_range,
+    get_body_comp_in_range,
     get_body_comp_last_week,
+    get_calories_burned_for_date,
+    get_sleep_for_date,
     get_calories_burned_today,
     get_hydration_today,
     get_readiness_snapshot,
@@ -314,6 +318,24 @@ For "[From Agent: ...]" messages, answer ONLY with the structured formats
   per day with a weigh-in: "<YYYY-MM-DD> | weight_lbs=<x.x> |
   body_fat_pct=<x.x|n/a>". No weigh-ins → the header line then
   "NO_DATA: no weigh-ins in the last 7 days".
+- "AGENT_QUERY: daily_metric | metric=<column key> | date=<YYYY-MM-DD>" →
+  reply EXACTLY one line per request:
+  "METRIC: metric=<key> date=<YYYY-MM-DD> value=<number|text>" — or
+  "NO_DATA: <reason>" when Garmin has nothing for that date. This must
+  work for ANY date, not just today (Maggie backfills the tracking sheet
+  after missed days). A single message may carry SEVERAL daily_metric
+  lines — answer each with its own METRIC/NO_DATA line, same order.
+  Metric keys and how to compute them:
+  · weight → get_body_comp_in_range(date, date) → weight_lbs
+  · body_fat_pct → same call → body_fat_pct
+  · run_distance → get_activities_in_range(date, date), sum
+    distance_miles over activities whose type contains "running"
+  · run_time → same call, sum duration_minutes over running activities,
+    report as H:MM:SS (e.g. 63.4 min → 1:03:24); no runs → NO_DATA
+  · lift → same call: value=yes if any "strength_training" activity that
+    date, else value=no (a recorded no-lift day is data, not NO_DATA)
+  · sleep_score → get_sleep_for_date(date) → sleep_score (the night
+    ending that morning); None → NO_DATA
 
 These formats are published to other agents — never improvise different
 field names or structure.
@@ -388,6 +410,10 @@ root_agent = Agent(
         FunctionTool(get_readiness_snapshot),
         FunctionTool(get_calories_burned_today),
         FunctionTool(get_recent_activities),
+        FunctionTool(get_activities_in_range),
+        FunctionTool(get_body_comp_in_range),
+        FunctionTool(get_sleep_for_date),
+        FunctionTool(get_calories_burned_for_date),
         FunctionTool(get_activity_detail),
         FunctionTool(push_run_workout_to_watch),
         FunctionTool(push_strength_workout_to_watch),

@@ -51,6 +51,7 @@ data for Jonathan Cavell; for other users she replies
 | `calories_burned_today` | `AGENT_QUERY: calories_burned_today` | `CALORIES_BURNED <YYYY-MM-DD>: total=<kcal> active=<kcal> bmr=<kcal>` |
 | `alarm_time` | `AGENT_QUERY: alarm_time` | `ALARM <YYYY-MM-DD>: <HH:MM AM/PM ET> (device: <name>)` or `ALARM <YYYY-MM-DD>: none set` |
 | `weight_body_fat_week` | `AGENT_QUERY: weight_body_fat_week` | `WEIGHT_BODY_FAT_REPORT (last 7 days, most recent first)` then one line per weigh-in day: `<YYYY-MM-DD> \| weight_lbs=<x.x> \| body_fat_pct=<x.x\|n/a>`; if none: `NO_DATA: no weigh-ins in the last 7 days` |
+| `daily_metric` | `AGENT_QUERY: daily_metric \| metric=<column key> \| date=<YYYY-MM-DD>` — keys: `weight`, `body_fat_pct`, `run_distance`, `run_time`, `lift`, `sleep_score`; ANY date; batchable (several lines in one message) | `METRIC: metric=<key> date=<YYYY-MM-DD> value=<number\|text>` — or `NO_DATA: <reason>` (one reply line per request line, same order) |
 
 These formats are a contract — agents parse them. Change them only
 together: `inquiries.json` + the prompt section in `agent.py` + this
