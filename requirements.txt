@@ -6,12 +6,15 @@ google-api-python-client
 google-cloud-secret-manager
 google-cloud-firestore
 google-cloud-aiplatform
-google-genai
+# Pinned <3: an unpinned deploy resolve is what shipped the serializer
+# behavior that turned a tool's date object into engine-killing 500s
+# (2026-09-01). Same philosophy as the mcp<2 pin below.
+google-genai>=2,<3
 # Garmin Connect (unofficial; curl_cffi-based client — see garmin_utilities.py
 # for the token-only auth model and scripts/bootstrap_garmin_tokens.py).
 garminconnect
 # Todoist unified API v1 SDK (v4.x, httpx-based).
-todoist-api-python
+todoist-api-python>=4,<5
 # [a2a] pulls the a2a package the ADK API server needs for its task store. The
 # deployed engine runs `adk api_server`, which imports
 # a2a.server.tasks.InMemoryTaskStore at startup whether or not this agent uses
@@ -31,5 +34,5 @@ todoist-api-python
 # dep can change under you between deploys — if a deploy suddenly breaks with no
 # code change, suspect a dependency bump first and check the engine build log for
 # versions.
-google-adk[a2a]
+google-adk[a2a]>=2,<3
 mcp>=1.5,<2

@@ -100,7 +100,11 @@ def find_open_workout_tasks() -> List[Dict[str, Any]]:
             out.append({
                 "task_id": task.id,
                 "content": task.content,
-                "due": task.due.date if task.due else None,
+                # str() not .isoformat(): the SDK has returned both str and
+                # datetime.date for due.date across versions; str() handles
+                # either (str(date) is ISO). A raw date object here crashes
+                # google-genai's request serializer on the NEXT model call.
+                "due": str(task.due.date) if task.due and task.due.date else None,
                 "labels": task.labels,
             })
     return out

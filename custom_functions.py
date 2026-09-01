@@ -10,6 +10,7 @@ stored token bundle stops working; the error text tells the model what to
 say (Jonathan must re-run scripts/bootstrap_garmin_tokens.py). Do not
 retry those.
 """
+import datetime
 import functools
 import logging
 import os
@@ -27,18 +28,40 @@ PLAN_TAB = "Current Marathon Plan"
 PHILOSOPHY_TAB = "Philosophy"
 
 
+def _json_sanitize(value):
+    """Recursively convert tool results to JSON-serializable types.
+
+    SDKs drift: todoist-api-python has returned datetime.date for due
+    dates in some versions, and a single non-JSON type anywhere in a tool
+    result crashes google-genai's request serializer on the NEXT model
+    call (the turn dies with an empty reply). Dates/datetimes become ISO
+    strings; unknown objects become str(obj).
+    """
+    if isinstance(value, dict):
+        return {k: _json_sanitize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_sanitize(v) for v in value]
+    if isinstance(value, (datetime.date, datetime.datetime)):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
 def _tool(func):
-    """Return errors to the model instead of raising.
+    """Return errors to the model instead of raising, and sanitize results.
 
     A raised exception aborts the whole turn on Agent Engine (the user just
     sees an empty reply), so every tool converts failures into
     {"error": "..."} results the model can read, explain, and act on —
     which is exactly what the prompt's Garmin-auth-failure protocol needs.
+    Results are JSON-sanitized (see _json_sanitize) so dependency drift can
+    never reintroduce the date-object serializer crash.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            return func(*args, **kwargs)
+            return _json_sanitize(func(*args, **kwargs))
         except Exception as e:
             logger.warning(f"Tool {func.__name__} failed: {type(e).__name__}: {e}")
             return {"error": f"{type(e).__name__}: {e}"}
