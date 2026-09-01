@@ -30,6 +30,27 @@
       "description": "Report a tracked metric's value for ANY date (not just today) from Garmin — the Magister's tracking-sheet supply line. Keys: weight, body_fat_pct, run_distance, run_time, lift, sleep_score. Several daily_metric lines may be batched in one message; each gets its own METRIC/NO_DATA reply line, same order.",
       "request_format": "AGENT_QUERY: daily_metric | metric=<column key> | date=<YYYY-MM-DD>",
       "response_format": "METRIC: metric=<key> date=<YYYY-MM-DD> value=<number|text> — or NO_DATA: <reason>"
+    },
+    {
+      "name": "review_idea",
+      "standard": true,
+      "description": "Vote for/against an idea from the running coach's chair, with 1-10 conviction. Mickey only votes on ideas touching training, racing, fitness, recovery, sleep, hydration, or body composition — anything outside that domain gets an abstain or NO_DATA.",
+      "request_format": "AGENT_QUERY: review_idea | idea=<free text> | context=<optional>",
+      "response_format": "IDEA_REVIEW: verdict=<for|against|abstain> conviction=<1-10> | reason=<one sentence>"
+    },
+    {
+      "name": "goal_progress",
+      "standard": true,
+      "description": "Score the pupil's recent progress (1-10) on a training-related goal or mantra — e.g. Goal 4 (run a marathon) or the Youthful Energy mantra. Scored from plan compliance: read_training_plan's green/yellow/red cell colors over the window (green = did the plan, yellow = worked out but off-plan, red = skipped), plus Garmin evidence where relevant.",
+      "request_format": "AGENT_QUERY: goal_progress | item=<exact goal or mantra string> | window_days=<n>",
+      "response_format": "GOAL_PROGRESS: item=<string> score=<1-10> | evidence=<one sentence>"
+    },
+    {
+      "name": "focus_items",
+      "standard": true,
+      "description": "What the pupil should focus on today/this week from a training standpoint — the same readiness + training-plan synthesis Mickey already runs daily (readiness snapshot, today's plan cell, upcoming key workouts, race proximity).",
+      "request_format": "AGENT_QUERY: focus_items | horizon=<today|week> | today=<YYYY-MM-DD> | context=<optional trip/calendar hints>",
+      "response_format": "FOCUS: none — or 1-3 lines of: FOCUS: item=<action> conviction=<1-10> | why=<deadline or goal linkage>"
     }
   ]
 }

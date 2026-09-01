@@ -52,10 +52,21 @@ data for Jonathan Cavell; for other users she replies
 | `alarm_time` | `AGENT_QUERY: alarm_time` | `ALARM <YYYY-MM-DD>: <HH:MM AM/PM ET> (device: <name>)` or `ALARM <YYYY-MM-DD>: none set` |
 | `weight_body_fat_week` | `AGENT_QUERY: weight_body_fat_week` | `WEIGHT_BODY_FAT_REPORT (last 7 days, most recent first)` then one line per weigh-in day: `<YYYY-MM-DD> \| weight_lbs=<x.x> \| body_fat_pct=<x.x\|n/a>`; if none: `NO_DATA: no weigh-ins in the last 7 days` |
 | `daily_metric` | `AGENT_QUERY: daily_metric \| metric=<column key> \| date=<YYYY-MM-DD>` — keys: `weight`, `body_fat_pct`, `run_distance`, `run_time`, `lift`, `sleep_score`; ANY date; batchable (several lines in one message) | `METRIC: metric=<key> date=<YYYY-MM-DD> value=<number\|text>` — or `NO_DATA: <reason>` (one reply line per request line, same order) |
+| `review_idea` * | `AGENT_QUERY: review_idea \| idea=<free text> \| context=<optional>` — training/fitness ideas only; anything else gets an abstain | `IDEA_REVIEW: verdict=<for\|against\|abstain> conviction=<1-10> \| reason=<one sentence>` |
+| `goal_progress` * | `AGENT_QUERY: goal_progress \| item=<exact goal or mantra string> \| window_days=<n>` — scored from the plan sheet's green/yellow/red compliance colors | `GOAL_PROGRESS: item=<string> score=<1-10> \| evidence=<one sentence>` |
+| `focus_items` * | `AGENT_QUERY: focus_items \| horizon=<today\|week> \| today=<YYYY-MM-DD> \| context=<optional trip/calendar hints>` — readiness + plan synthesis | `FOCUS: none` — or 1-3 lines of: `FOCUS: item=<action> conviction=<1-10> \| why=<deadline or goal linkage>` |
+
+\* Magister standard-suite inquiries (`"standard": true` in
+`inquiries.json`): published only when `MAGISTER_DISPLAY_NAME` is set in
+`.env`. Their formats come verbatim from
+`comites_standard.STANDARD_CONTRACTS` and `register_agent.py` fails the
+deploy if they drift. `daily_metric` is also a standard contract but is
+deliberately unflagged — it predates the suite and always publishes.
 
 These formats are a contract — agents parse them. Change them only
 together: `inquiries.json` + the prompt section in `agent.py` + this
-table, in one commit.
+table, in one commit (standard-suite formats additionally live in
+`comites_standard.py`; see AGENTS.md rule 13).
 
 ## The training-plan spreadsheet
 

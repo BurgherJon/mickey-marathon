@@ -130,6 +130,25 @@ touch all three places in ONE commit: `inquiries.json`, the "Inquiries you
 answer" section of the prompt in `agent.py`, and the table in `README.md` —
 then redeploy (registration happens automatically).
 
+The Magister standard suite (`comites_standard.py`) extends this rule:
+
+- Any `inquiries.json` entry whose NAME matches a standard contract
+  (`review_idea`, `goal_progress`, `focus_items`, `daily_metric`) must keep
+  its `request_format`/`response_format` VERBATIM equal to
+  `comites_standard.STANDARD_CONTRACTS` — `register_agent.py` hard-fails
+  the deploy on drift. Changing a standard format means updating
+  `comites_standard.py` (estate-wide, in every repo that carries it) and
+  `inquiries.json` in the same commit, not editing one side.
+- Entries flagged `"standard": true` are published only when
+  `MAGISTER_DISPLAY_NAME` is set (deployments without a Magister skip
+  them), and the flag is stripped before publishing. `daily_metric` is
+  deliberately UNflagged: it predates the suite and always publishes.
+- The prompt side of the standard suite is the fragment appended by
+  `magister_instruction()` in `build_instruction`, built at runtime from
+  `inquiries.json` — which is why `inquiries.json` must NOT be added to
+  `.ae_ignore` (pruning the file and shipping it are the same commit's
+  concern; see the note in `.ae_ignore`).
+
 ### 14. A2A messages carry an On-Behalf-Of user — scope answers to it
 
 Messages prefixed `[From Agent: <Agent> | On Behalf Of: <User>]` come from

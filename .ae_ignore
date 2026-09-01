@@ -68,11 +68,13 @@ MAINTAINER_SETUP.md
 .readme_template_post_setup.md
 
 # Operator scripts (not needed at runtime)
+# NOTE: inquiries.json is deliberately NOT listed here — comites_standard.py
+# reads it at runtime to build the Magister-suite instruction fragment, so it
+# must ship in the deploy bundle.
 get_started_linux.sh
 deploy_and_update.sh
 register_agent.py
 scripts
-inquiries.json
 
 # Docs (don't bloat the container)
 README.md

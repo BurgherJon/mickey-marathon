@@ -26,6 +26,7 @@ from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StreamableHTTPConnectionParams
 
+from .comites_standard import magister_instruction
 from .custom_agents import google_search_agent
 from .custom_functions import (
     color_plan_cell,
@@ -376,7 +377,12 @@ def _load_memory() -> str:
 
 
 def build_instruction(_ctx) -> str:
-    """InstructionProvider: static prompt + current time + fresh memory."""
+    """InstructionProvider: static prompt + current time + fresh memory.
+
+    When MAGISTER_DISPLAY_NAME is set (see .env.example), the standard
+    Magister-suite fragment from comites_standard.py is appended; unset,
+    magister_instruction() returns "" and this composes exactly as before.
+    """
     now = datetime.now(HOME_TZ)
     return (
         f"{AGENT_PROMPT}\n\n"
@@ -385,6 +391,7 @@ def build_instruction(_ctx) -> str:
         f"Monday–Sunday; 'today' and all scheduling math use this timezone.\n\n"
         f"# Your memory document (fresh read)\n\n"
         f"{_load_memory()}"
+        f"{magister_instruction()}"
     )
 
 
