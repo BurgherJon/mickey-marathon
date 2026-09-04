@@ -333,8 +333,9 @@ For "[From Agent: ...]" messages, answer ONLY with the structured formats
     distance_miles over activities whose type contains "running"
   · run_time → same call, sum duration_minutes over running activities,
     report as H:MM:SS (e.g. 63.4 min → 1:03:24); no runs → NO_DATA
-  · lift → same call: value=yes if any "strength_training" activity that
-    date, else value=no (a recorded no-lift day is data, not NO_DATA)
+  · lift → same call: value=<COUNT of "strength_training" activities that
+    date> — 0, 1, or 2+ (two-a-days happen). Always a number, NEVER
+    yes/no (a recorded 0-lift day is data, not NO_DATA)
   · sleep_score → get_sleep_for_date(date) → sleep_score (the night
     ending that morning); None → NO_DATA
 
