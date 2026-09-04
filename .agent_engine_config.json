@@ -1,3 +1,6 @@
 {
-  "service_account": "mickey-marathon@mickey-marathon.iam.gserviceaccount.com"
+  "service_account": "mickey-marathon@mickey-marathon.iam.gserviceaccount.com",
+  "extra_packages": [
+    "inquiries.json"
+  ]
 }
